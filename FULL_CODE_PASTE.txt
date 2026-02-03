@@ -1,0 +1,997 @@
+========================================
+ACADEMIC TASK MANAGER - FULL SOURCE CODE
+React + Vite + Tailwind. Paste this entire block into ChatGPT for a report.
+========================================
+
+--- FILE: package.json ---
+{
+  "name": "academic-task-manager",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "vite": "^6.0.3"
+  }
+}
+
+--- FILE: vite.config.js ---
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
+
+--- FILE: index.html ---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Academic Task Manager</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
+--- FILE: postcss.config.js ---
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+
+--- FILE: tailwind.config.js ---
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  theme: {
+    extend: {
+      keyframes: {
+        "slide-in": {
+          "0%": { transform: "translateX(100%)", opacity: "0" },
+          "100%": { transform: "translateX(0)", opacity: "1" },
+        },
+      },
+      animation: {
+        "slide-in": "slide-in 0.3s ease-out",
+      },
+      minHeight: {
+        touch: "44px",
+      },
+    },
+  },
+  plugins: [],
+}
+
+--- FILE: src/main.jsx ---
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App.jsx";
+
+createRoot(document.getElementById("root")).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+
+--- FILE: src/index.css ---
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+--- FILE: src/App.jsx ---
+import { useState, useCallback } from "react";
+import { useAuth } from "./hooks/useAuth";
+import { useTasks } from "./hooks/useTasks";
+import { generateId, getTaskCategory } from "./utils/taskUtils";
+
+import Notification from "./components/Notification";
+import LoginScreen from "./components/LoginScreen";
+import Header from "./components/Header";
+import DashboardSummary from "./components/DashboardSummary";
+import ActionButtons from "./components/ActionButtons";
+import TaskForm from "./components/TaskForm";
+import EmptyState from "./components/EmptyState";
+import TaskList from "./components/TaskList";
+
+const INITIAL_FORM = {
+  title: "",
+  course: "",
+  dueDate: "",
+  priority: "medium",
+};
+
+export default function App() {
+  const { currentUser, login, logout } = useAuth();
+  const {
+    tasks,
+    addTask: addTaskToStore,
+    updateTask,
+    deleteTask,
+    toggleComplete,
+    clearTasks,
+    getGroupedTasks,
+  } = useTasks(currentUser);
+
+  const [username, setUsername] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [showCompleted, setShowCompleted] = useState(true);
+  const [notification, setNotification] = useState(null);
+  const [formData, setFormData] = useState(INITIAL_FORM);
+
+  const showNotify = useCallback((message, type = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  }, []);
+
+  const handleLogin = useCallback(() => {
+    const t = (username || "").trim();
+    if (!t) return;
+    const name = login(t);
+    if (name) {
+      setUsername("");
+      setTimeout(() => showNotify(`Welcome back, ${name}!`), 100);
+    }
+  }, [username, login, showNotify]);
+
+  const handleLogout = useCallback(() => {
+    logout();
+    clearTasks();
+    setShowForm(false);
+    setEditingTask(null);
+  }, [logout, clearTasks]);
+
+  const handleAddTask = useCallback(
+    (data) => {
+      const task = {
+        id: generateId(),
+        title: (data.title || "").trim(),
+        course: (data.course || "").trim(),
+        dueDate: (data.dueDate || "").trim(),
+        priority: data.priority || "medium",
+        completed: false,
+        createdAt: new Date().toISOString(),
+      };
+      addTaskToStore(task);
+      showNotify("Task added successfully!");
+    },
+    [addTaskToStore, showNotify]
+  );
+
+  const handleUpdateTask = useCallback(
+    (id, data) => {
+      updateTask(id, {
+        title: (data.title || "").trim(),
+        course: (data.course || "").trim(),
+        dueDate: (data.dueDate || "").trim(),
+        priority: data.priority || "medium",
+      });
+      showNotify("Task updated successfully!");
+    },
+    [updateTask, showNotify]
+  );
+
+  const handleDeleteTask = useCallback(
+    (id) => {
+      deleteTask(id);
+      showNotify("Task deleted", "info");
+    },
+    [deleteTask, showNotify]
+  );
+
+  const handleToggleComplete = useCallback(
+    (id) => {
+      const wasIncomplete = toggleComplete(id);
+      if (wasIncomplete) showNotify("Task completed! 🎉");
+    },
+    [toggleComplete, showNotify]
+  );
+
+  const handleStartEdit = useCallback((task) => {
+    setEditingTask(task);
+    setFormData({
+      title: task.title || "",
+      course: task.course || "",
+      dueDate: task.dueDate || "",
+      priority: task.priority || "medium",
+    });
+    setShowForm(true);
+  }, []);
+
+  const resetForm = useCallback(() => {
+    setFormData(INITIAL_FORM);
+    setShowForm(false);
+    setEditingTask(null);
+  }, []);
+
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        username={username}
+        setUsername={setUsername}
+        onLogin={handleLogin}
+      />
+    );
+  }
+
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter((t) => t.completed).length;
+  const upcomingTasks = tasks.filter((t) => {
+    const c = getTaskCategory(t.dueDate);
+    return !t.completed && (c === "today" || c === "thisWeek");
+  }).length;
+  const groupedTasks = getGroupedTasks(showCompleted);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <Notification notification={notification} />
+
+      <Header currentUser={currentUser} onLogout={handleLogout} />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        <DashboardSummary
+          totalTasks={totalTasks}
+          upcomingTasks={upcomingTasks}
+          completedTasks={completedTasks}
+        />
+
+        <ActionButtons
+          showForm={showForm}
+          setShowForm={setShowForm}
+          showCompleted={showCompleted}
+          setShowCompleted={setShowCompleted}
+        />
+
+        {showForm && (
+          <TaskForm
+            formData={formData}
+            setFormData={setFormData}
+            editingTask={editingTask}
+            onAdd={handleAddTask}
+            onUpdate={handleUpdateTask}
+            onReset={resetForm}
+          />
+        )}
+
+        {tasks.length === 0 ? (
+          <EmptyState onAddFirst={() => setShowForm(true)} />
+        ) : (
+          <TaskList
+            groupedTasks={groupedTasks}
+            onToggleComplete={handleToggleComplete}
+            onEdit={handleStartEdit}
+            onDelete={handleDeleteTask}
+          />
+        )}
+      </main>
+    </div>
+  );
+}
+
+--- FILE: src/utils/taskUtils.js ---
+/**
+ * Generates a unique task ID.
+ */
+export const generateId = () =>
+  `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+/**
+ * Categorizes a task by due date: overdue, today, thisWeek, later, or (when completed) completed.
+ */
+export const getTaskCategory = (dueDate) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  const daysDiff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+  if (daysDiff < 0) return "overdue";
+  if (daysDiff === 0) return "today";
+  if (daysDiff <= 7) return "thisWeek";
+  return "later";
+};
+
+/**
+ * Returns today's date as YYYY-MM-DD for the date input min attribute.
+ */
+export const getTodayDate = () => new Date().toISOString().split("T")[0];
+
+/**
+ * Priority colors per spec: High=Red, Medium=Amber, Low=Green
+ */
+export const priorityColors = {
+  high: "bg-red-100 text-red-700 border-red-200",
+  medium: "bg-amber-100 text-amber-700 border-amber-200",
+  low: "bg-emerald-100 text-emerald-700 border-emerald-200",
+};
+
+export const categoryTitles = {
+  overdue: "Overdue",
+  today: "Due Today",
+  thisWeek: "This Week",
+  later: "Later",
+  completed: "Completed",
+};
+
+export const categoryColors = {
+  overdue: "border-l-4 border-red-500 bg-red-50",
+  today: "border-l-4 border-blue-500 bg-blue-50",
+  thisWeek: "border-l-4 border-indigo-500 bg-indigo-50",
+  later: "border-l-4 border-gray-400 bg-gray-50",
+  completed: "border-l-4 border-green-500 bg-green-50",
+};
+
+export const categoryOrder = [
+  "overdue",
+  "today",
+  "thisWeek",
+  "later",
+  "completed",
+];
+
+--- FILE: src/hooks/useAuth.js ---
+import { useState, useEffect } from "react";
+
+const STORAGE_KEY = "currentUser";
+
+/**
+ * Simulated auth: username-based login, no passwords.
+ * Session persisted in localStorage; supports logout.
+ */
+export function useAuth() {
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) setCurrentUser(saved);
+    } catch {
+      // localStorage disabled or corrupted
+    }
+  }, []);
+
+  const login = (username) => {
+    const trimmed = (username || "").trim();
+    if (!trimmed) return null;
+    setCurrentUser(trimmed);
+    localStorage.setItem(STORAGE_KEY, trimmed);
+    return trimmed;
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  return { currentUser, login, logout };
+}
+
+--- FILE: src/hooks/useTasks.js ---
+import { useState, useEffect } from "react";
+import { getTaskCategory } from "../utils/taskUtils";
+
+const getStorageKey = (username) => `tasks_${username}`;
+
+/**
+ * Task CRUD with user-specific localStorage.
+ * Handles empty/corrupted data without crashing.
+ */
+export function useTasks(currentUser) {
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setTasks([]);
+      return;
+    }
+    const key = getStorageKey(currentUser);
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setTasks(JSON.parse(raw));
+      else setTasks([]);
+    } catch {
+      setTasks([]);
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      localStorage.setItem(getStorageKey(currentUser), JSON.stringify(tasks));
+    } catch {
+      // quota or disabled
+    }
+  }, [tasks, currentUser]);
+
+  const addTask = (task) => setTasks((p) => [...p, task]);
+  const updateTask = (id, updates) =>
+    setTasks((p) => p.map((t) => (t.id === id ? { ...t, ...updates } : t)));
+  const deleteTask = (id) => setTasks((p) => p.filter((t) => t.id !== id));
+  const toggleComplete = (id) => {
+    const t = tasks.find((x) => x.id === id);
+    setTasks((p) =>
+      p.map((x) => (x.id === id ? { ...x, completed: !x.completed } : x))
+    );
+    return t && !t.completed; // was incomplete, now completed
+  };
+  const clearTasks = () => setTasks([]);
+
+  const getGroupedTasks = (showCompleted) => {
+    const groups = {};
+    for (const task of tasks) {
+      if (!showCompleted && task.completed) continue;
+      const cat = task.completed ? "completed" : getTaskCategory(task.dueDate);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(task);
+    }
+    for (const cat of Object.keys(groups))
+      groups[cat].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    return groups;
+  };
+
+  return {
+    tasks,
+    addTask,
+    updateTask,
+    deleteTask,
+    toggleComplete,
+    clearTasks,
+    getGroupedTasks,
+  };
+}
+
+--- FILE: src/components/Notification.jsx ---
+import { CheckCircle2 } from "lucide-react";
+
+/**
+ * Toast notification. Auto-dismiss 3s handled by parent.
+ * Types: success, info.
+ */
+export default function Notification({ notification }) {
+  if (!notification) return null;
+  const bg =
+    notification.type === "info" ? "bg-blue-500" : "bg-green-500";
+  return (
+    <div className="fixed top-4 right-4 z-50 animate-slide-in" role="alert">
+      <div
+        className={`${bg} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2`}
+      >
+        <CheckCircle2 size={20} aria-hidden />
+        <span className="font-medium">{notification.message}</span>
+      </div>
+    </div>
+  );
+}
+
+--- FILE: src/components/LoginScreen.jsx ---
+import { User } from "lucide-react";
+
+/**
+ * Simulated login: username only. Trimmed; no empty/whitespace.
+ * Enter key submits; disabled state 50% opacity.
+ * Touch-friendly: min-h-touch (44px) on primary CTA.
+ */
+export default function LoginScreen({ username, setUsername, onLogin }) {
+  const trimmed = (username || "").trim();
+  const canSubmit = trimmed.length > 0;
+
+  const handleSubmit = (e) => {
+    e?.preventDefault?.();
+    if (canSubmit) onLogin();
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 md:p-10 w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full mb-4 shadow-lg">
+            <User size={40} className="text-white" aria-hidden />
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-gray-600">
+            Sign in to manage your academic tasks
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label htmlFor="username" className="block text-sm font-semibold text-gray-700 mb-2">
+              Username
+            </label>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your username"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+              autoFocus
+              autoComplete="username"
+              aria-required="true"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="w-full min-h-touch py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed disabled:shadow-none disabled:opacity-50"
+          >
+            Sign In
+          </button>
+        </form>
+
+        <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+          <p className="text-sm text-gray-700 text-center">
+            <strong className="text-blue-700">Demo Mode:</strong> Enter any
+            username to get started.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+--- FILE: src/components/Header.jsx ---
+import { LogOut } from "lucide-react";
+
+export default function Header({ currentUser, onLogout }) {
+  return (
+    <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              Academic Task Manager
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Stay organized, stay ahead
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs text-gray-500">Logged in as</div>
+              <div className="font-semibold text-gray-900">{currentUser}</div>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="flex items-center gap-2 min-h-touch px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-medium"
+              title="Logout"
+            >
+              <LogOut size={18} aria-hidden />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+--- FILE: src/components/DashboardSummary.jsx ---
+/**
+ * Dashboard statistics: Total, Upcoming (today + this week), Completed.
+ * Real-time updates via props.
+ */
+export default function DashboardSummary({
+  totalTasks,
+  upcomingTasks,
+  completedTasks,
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+      <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-gray-400 hover:shadow-lg transition">
+        <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Total Tasks
+        </div>
+        <div className="text-4xl font-bold text-gray-900">{totalTasks}</div>
+      </div>
+      <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500 hover:shadow-lg transition">
+        <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Upcoming
+        </div>
+        <div className="text-4xl font-bold text-blue-600">{upcomingTasks}</div>
+      </div>
+      <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500 hover:shadow-lg transition">
+        <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Completed
+        </div>
+        <div className="text-4xl font-bold text-green-600">{completedTasks}</div>
+      </div>
+    </div>
+  );
+}
+
+--- FILE: src/components/ActionButtons.jsx ---
+import { Plus } from "lucide-react";
+
+/**
+ * Add New Task and Show/Hide Completed. Touch-friendly min-h-touch.
+ */
+export default function ActionButtons({
+  showForm,
+  setShowForm,
+  showCompleted,
+  setShowCompleted,
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <button
+        type="button"
+        onClick={() => setShowForm((v) => !v)}
+        className="flex items-center justify-center gap-2 min-h-touch px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg font-semibold"
+      >
+        <Plus size={20} aria-hidden />
+        Add New Task
+      </button>
+      <button
+        type="button"
+        onClick={() => setShowCompleted((v) => !v)}
+        className="min-h-touch px-5 py-3 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-semibold"
+      >
+        {showCompleted ? "Hide" : "Show"} Completed Tasks
+      </button>
+    </div>
+  );
+}
+
+--- FILE: src/components/TaskForm.jsx ---
+import { Check, X } from "lucide-react";
+import { getTodayDate } from "../utils/taskUtils";
+
+/**
+ * Add/Edit task form. Validation: title and due date required; trim inputs.
+ * Min date = today. Priority defaults to medium; submit disabled when invalid.
+ * Touch-friendly buttons.
+ */
+export default function TaskForm({
+  formData,
+  setFormData,
+  editingTask,
+  onAdd,
+  onUpdate,
+  onReset,
+}) {
+  const titleOk = (formData.title || "").trim().length > 0;
+  const dateOk = !!(formData.dueDate || "").trim();
+  const canSubmit = titleOk && dateOk;
+
+  const handleSubmit = (e) => {
+    e?.preventDefault?.();
+    if (!canSubmit) return;
+    if (editingTask) {
+      onUpdate(editingTask.id, {
+        title: (formData.title || "").trim(),
+        course: (formData.course || "").trim(),
+        dueDate: (formData.dueDate || "").trim(),
+        priority: formData.priority || "medium",
+      });
+    } else {
+      onAdd({
+        title: (formData.title || "").trim(),
+        course: (formData.course || "").trim(),
+        dueDate: (formData.dueDate || "").trim(),
+        priority: formData.priority || "medium",
+      });
+    }
+    onReset();
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-8 border border-gray-200">
+      <h2 className="text-xl font-bold text-gray-900 mb-6">
+        {editingTask ? "Edit Task" : "Add New Task"}
+      </h2>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="md:col-span-2">
+            <label
+              htmlFor="task-title"
+              className="block text-sm font-semibold text-gray-700 mb-2"
+            >
+              Task Title <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="task-title"
+              type="text"
+              value={formData.title || ""}
+              onChange={(e) => setFormData((f) => ({ ...f, title: e.target.value }))}
+              placeholder="e.g., Complete Physics Lab Report"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="task-course"
+              className="block text-sm font-semibold text-gray-700 mb-2"
+            >
+              Course Name
+            </label>
+            <input
+              id="task-course"
+              type="text"
+              value={formData.course || ""}
+              onChange={(e) => setFormData((f) => ({ ...f, course: e.target.value }))}
+              placeholder="e.g., Physics 201"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="task-due"
+              className="block text-sm font-semibold text-gray-700 mb-2"
+            >
+              Due Date <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="task-due"
+              type="date"
+              value={formData.dueDate || ""}
+              min={getTodayDate()}
+              onChange={(e) =>
+                setFormData((f) => ({ ...f, dueDate: e.target.value }))
+              }
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+            />
+          </div>
+          <div className="md:col-span-2">
+          <span className="block text-sm font-semibold text-gray-700 mb-3">
+            Priority Level
+          </span>
+          <div className="flex flex-wrap gap-3">
+            {["low", "medium", "high"].map((p) => (
+              <label
+                key={p}
+                className="flex items-center cursor-pointer min-h-touch px-4 py-2 border-2 rounded-lg transition hover:bg-gray-50"
+                style={{
+                  borderColor:
+                    (formData.priority || "medium") === p ? "#3b82f6" : "#e5e7eb",
+                  backgroundColor:
+                    (formData.priority || "medium") === p ? "#eff6ff" : "white",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="priority"
+                  value={p}
+                  checked={(formData.priority || "medium") === p}
+                  onChange={(e) =>
+                    setFormData((f) => ({ ...f, priority: e.target.value }))
+                  }
+                  className="mr-2 text-blue-600"
+                />
+                <span className="font-medium capitalize">{p}</span>
+              </label>
+            ))}
+          </div>
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 mt-8">
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="flex items-center justify-center gap-2 min-h-touch px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Check size={18} aria-hidden />
+            {editingTask ? "Update Task" : "Add Task"}
+          </button>
+          <button
+            type="button"
+            onClick={onReset}
+            className="flex items-center justify-center gap-2 min-h-touch px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold"
+          >
+            <X size={18} aria-hidden />
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+--- FILE: src/components/EmptyState.jsx ---
+import { Plus, AlertCircle } from "lucide-react";
+
+/**
+ * Shown when there are no tasks. CTA to add first task.
+ */
+export default function EmptyState({ onAddFirst }) {
+  return (
+    <div className="bg-white rounded-xl shadow-md p-12 md:p-16 text-center border border-gray-200">
+      <div className="inline-flex items-center justify-center w-20 h-20 bg-gray-100 rounded-full mb-6">
+        <AlertCircle size={40} className="text-gray-400" aria-hidden />
+      </div>
+      <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-3">
+        No tasks yet
+      </h2>
+      <p className="text-gray-600 mb-6 max-w-md mx-auto">
+        Start organizing your academic life by adding your first task
+      </p>
+      <button
+        type="button"
+        onClick={onAddFirst}
+        className="inline-flex items-center gap-2 min-h-touch px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md font-semibold"
+      >
+        <Plus size={20} aria-hidden />
+        Add Your First Task
+      </button>
+    </div>
+  );
+}
+
+--- FILE: src/components/TaskCard.jsx ---
+import { Calendar, Edit2, Trash2 } from "lucide-react";
+import { priorityColors } from "../utils/taskUtils";
+
+/**
+ * Single task row: checkbox, title, course, due date, priority badge, edit/delete.
+ * Completed: strikethrough + reduced opacity. Touch-friendly controls.
+ */
+export default function TaskCard({
+  task,
+  categoryColor,
+  onToggleComplete,
+  onEdit,
+  onDelete,
+}) {
+  return (
+    <div
+      className={`${categoryColor} rounded-lg p-5 transition hover:shadow-md ${
+        task.completed ? "opacity-75" : ""
+      }`}
+    >
+      <div className="flex items-start gap-4">
+        <label className="flex items-center gap-2 cursor-pointer min-h-touch">
+          <input
+            type="checkbox"
+            checked={!!task.completed}
+            onChange={() => onToggleComplete(task.id)}
+            className="w-6 h-6 text-blue-600 rounded-md cursor-pointer focus:ring-2 focus:ring-blue-500"
+          />
+        </label>
+        <div className="flex-1 min-w-0">
+          <h3
+            className={`font-semibold text-gray-900 mb-2 text-base md:text-lg ${
+              task.completed ? "line-through text-gray-500" : ""
+            }`}
+          >
+            {task.title}
+          </h3>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            {task.course ? (
+              <span className="font-semibold text-gray-700 px-3 py-1 bg-white rounded-full border border-gray-200">
+                {task.course}
+              </span>
+            ) : null}
+            <span className="flex items-center gap-1 text-gray-600 px-3 py-1 bg-white rounded-full border border-gray-200">
+              <Calendar size={14} aria-hidden />
+              {new Date(task.dueDate).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </span>
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-bold border-2 ${
+                priorityColors[task.priority] || priorityColors.medium
+              }`}
+            >
+              {(task.priority || "medium").toUpperCase()}
+            </span>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onEdit(task)}
+            className="p-2 min-h-touch min-w-[44px] flex items-center justify-center text-gray-600 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition"
+            title="Edit task"
+          >
+            <Edit2 size={20} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(task.id)}
+            className="p-2 min-h-touch min-w-[44px] flex items-center justify-center text-gray-600 hover:text-red-600 hover:bg-red-100 rounded-lg transition"
+            title="Delete task"
+          >
+            <Trash2 size={20} aria-hidden />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+--- FILE: src/components/TaskList.jsx ---
+import { AlertCircle } from "lucide-react";
+import {
+  categoryOrder,
+  categoryTitles,
+  categoryColors,
+} from "../utils/taskUtils";
+import TaskCard from "./TaskCard";
+
+const categoryBorder = {
+  overdue: "border-red-200",
+  today: "border-blue-200",
+  thisWeek: "border-indigo-200",
+  completed: "border-green-200",
+  later: "border-gray-200",
+};
+
+/**
+ * Renders tasks grouped by category. Section headers with counts.
+ */
+export default function TaskList({
+  groupedTasks,
+  onToggleComplete,
+  onEdit,
+  onDelete,
+}) {
+  return (
+    <div className="space-y-6 md:space-y-8">
+      {categoryOrder.map((cat) => {
+        const list = groupedTasks[cat];
+        if (!list || list.length === 0) return null;
+        const border = categoryBorder[cat] || "border-gray-200";
+        return (
+          <section
+            key={cat}
+            className="bg-white rounded-xl shadow-md p-6 md:p-8 border border-gray-200"
+          >
+            <div className={`mb-6 pb-4 border-b-2 ${border}`}>
+              <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-3">
+                {cat === "overdue" && (
+                  <AlertCircle size={24} className="text-red-600" aria-hidden />
+                )}
+                {categoryTitles[cat] || "Completed"}
+                <span className="text-base font-semibold px-3 py-1 bg-gray-100 text-gray-600 rounded-full">
+                  {list.length}
+                </span>
+              </h2>
+            </div>
+            <div className="space-y-4">
+              {list.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  categoryColor={categoryColors[cat] || ""}
+                  onToggleComplete={onToggleComplete}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+========================================
+END OF ACADEMIC TASK MANAGER SOURCE CODE
+========================================
