@@ -3,9 +3,11 @@ runtime: nodejs22
 
 build:
   commands:
-    build:
-      - npm install
+    pre-build:
+      - npm install --only=dev
       - npm run build
+    build:
+      - npm install --production
 
 run:
   command: npm run start:prod
