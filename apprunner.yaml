@@ -4,7 +4,7 @@ runtime: nodejs22
 build:
   commands:
     pre-build:
-      - npm install --only=dev
+      - npm install
       - npm run build
     build:
       - npm install --production
